@@ -100,6 +100,6 @@ def cycle_loss(R_A, F_A_, R_B, F_B_, lambda_):
 
 def residual_loss(R_A, F_B, F_A_, R_B, F_A, F_B_, lambda_):
     real_noise = R_A - R_B
-    fake_noise = F_A - F_B
+    fake_noise = F_B - F_A
     fake_noise_ = F_A_ - F_B_
     return lambda_ * (tf.reduce_mean(tf.abs(real_noise - fake_noise)) + tf.reduce_mean(tf.abs(real_noise - fake_noise_)))
