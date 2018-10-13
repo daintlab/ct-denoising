@@ -64,7 +64,7 @@ class DCMDataLoader(object):
             self.LDCT_image_name.extend(LDCT_slice_nm)
             self.NDCT_image_name.extend(NDCT_slice_nm)
 
-            #normalization 
+            #normalization  
             p_LDCT.append(normalize(org_LDCT_images, self.image_max , self.image_min, self.model))
             p_NDCT.append(normalize(org_NDCT_images, self.image_max , self.image_min, self.model))
             

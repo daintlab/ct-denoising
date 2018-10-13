@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sun Aug 19 16:39:45 2018
+Created on Thu Oct 11 11:04:24 2018
 
 @author: yeohyeongyu
 """
+
 
 """
 ################################################################################
@@ -18,10 +19,6 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import tensorflow.contrib.layers as tcl
 import numpy as np
-
-import time
-import inspect
-
 
 """
 module (discriminator, generator, pretrained vgg)
@@ -152,6 +149,3 @@ def fcn(input_, n_weight, name = 'fcn'):
         flat_img = tcl.flatten(input_)
         fc = tcl.fully_connected(flat_img, n_weight, activation_fn=None)
         return fc
-    
-
-
