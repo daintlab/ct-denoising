@@ -1,7 +1,7 @@
 # WGAN_VGG
 ## Ntwork architecture
-* Generator  
 ![Network architecture](https://github.com/hyeongyuy/ct-denoising/blob/master/WGAN_VGG/img/network.jpg)  
+* Generator
 > * 8 conv layers (with relu)
 > * kernel size : 3*3 
 > * filters 
