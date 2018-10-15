@@ -30,7 +30,7 @@
 > * lambda(WGAN weight penalty) : 10
 > * lambda1(VGG weight) : 0.1, lambda2 : 0.1
 ## Different
-> [X] epoch : 100  -> iteration
+> [X] epoch : 100  -> iteration  
 > [X] remove mostly air images  -> no remove (Hounsfield unit scale -> normalize 0 ~ 1)
 
 ## Main file(main.py) Parameters
