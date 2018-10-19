@@ -24,11 +24,11 @@
 > * test_npy_save_dir : save directory - test numpy file
 > * pretrained_vgg : pretrained vggnet directory(only WGAN_VGG)
 * Image info
-> * patch_size : image patch size (WGAN_VGG, RED_CNN)
-> * whole_size : image whole size
+> * patch_size : patch size (WGAN_VGG, RED_CNN)
+> * whole_size : whole size
 > * img_channel : image channel
-> * img_vmax : image
-> * img_vmin : image
+> * img_vmax : max value
+> * img_vmin : min value
 * Train/Test
 > * model : red_cnn, wgan_vgg, cyclegan (for image preprocessing)
 > * phase : train | test
