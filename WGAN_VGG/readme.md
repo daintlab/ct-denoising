@@ -50,3 +50,8 @@
 > python main.py
 * test
 > python main.py --phase=test
+
+## pretrained vgg
+> * https://github.com/machrisaa/tensorflow-vgg
+> * https://mega.nz/#!xZ8glS6J!MAnE91ND_WyfZ_8mvkuSa2YcA7q-1ehfSm-Q1fxOvvs
+
