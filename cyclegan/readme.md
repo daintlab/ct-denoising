@@ -1,10 +1,10 @@
 # CYCLEGAN
 ## Archtecture & training detail  
-![Network architecture](https://github.com/hyeongyuy/ct-denoising/blob/master/cyclegan/img/cyclegan_arch_detail.jpg)  
+![Network architecture](https://github.com/hyeongyuy/ct-denoising/blob/master/CYCLEGAN/img/cyclegan_arch_detail.jpg)  
 ## Cycle-consistency  
-![cycle loss](https://github.com/hyeongyuy/ct-denoising/blob/master/cyclegan/img/cycle_loss_concept.JPG)  
+![cycle loss](https://github.com/hyeongyuy/ct-denoising/blob/master/CYCLEGAN/img/cycle_loss_concept.JPG)  
 ## Objective & loss  
-![Objective](https://github.com/hyeongyuy/ct-denoising/blob/master/cyclegan/img/cyclegan_loss.jpg)  
+![Objective](https://github.com/hyeongyuy/ct-denoising/blob/master/CYCLEGAN/img/cyclegan_loss.jpg)  
 ## Main file(main.py) Parameters
 * training detail
 > * end_epoch : end epoch (default=200)

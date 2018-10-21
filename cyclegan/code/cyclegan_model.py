@@ -12,7 +12,6 @@ from glob import glob
 import tensorflow as tf
 import numpy as np
 from collections import namedtuple
-
 import cyclegan_module as md
 import inout_util as ut
 
@@ -37,33 +36,63 @@ class cyclegan(object):
                                       args.phase == 'train'))
 
         """
+        load images
+        """
+        print('data load... dicom -> numpy') 
+        self.image_loader = ut.DCMDataLoader(args.dcm_path, args.LDCT_path, args.NDCT_path, \
+             image_size = args.whole_size, depth = args.img_channel,
+             image_max = args.img_vmax, image_min = args.img_vmin,\
+             is_unpair = args.unpair, model = args.model)
+                                     
+        self.test_image_loader = ut.DCMDataLoader(args.dcm_path, args.LDCT_path, args.NDCT_path,\
+             image_size = args.whole_size, depth = args.img_channel,
+             image_max = args.img_vmax, image_min = args.img_vmin,\
+             is_unpair = args.unpair, model = args.model)
+
+        t1 = time.time()
+        if args.phase == 'train':
+            self.image_loader(self.train_patent_no)
+            self.test_image_loader(self.test_patent_no)
+            print('data load complete !!!, {}\nN_train : {}, N_test : {}'.format(time.time() - t1, len(self.image_loader.LDCT_image_name), len(self.test_image_loader.LDCT_image_name)))
+            [self.real_X , self.real_Y] = self.image_loader.input_pipeline(self.sess, args.whole_size, args.end_epoch)
+        else:
+            self.test_image_loader(self.test_patent_no)
+            print('data load complete !!!, {}, N_test : {}'.format(time.time() - t1, len(self.test_image_loader.LDCT_image_name)))
+        
+            self.real_X =  tf.placeholder(tf.float32, [None, args.whole_size, args.whole_size, args.img_channel], name = 'LDCT')
+            self.real_Y =  tf.placeholder(tf.float32, [None, args.whole_size, args.whole_size, args.img_channel], name = 'LDCT')
+     
+        
+        """
         build model
         """
-        #real image placehold 
+        #### image placehold 
+
         self.X = tf.placeholder(tf.float32, [None, args.whole_size, args.whole_size, args.img_channel], name='X')
         self.Y = tf.placeholder(tf.float32, [None, args.whole_size, args.whole_size, args.img_channel], name='Y')
 
 
         #### Generator & Discriminator
         #Generator
-        self.G_X = self.generator(self.X, self.options, False, name="generatorX2Y")
+        self.G_X = self.generator(self.real_X, self.options, False, name="generatorX2Y")
         self.F_GX = self.generator(self.G_X, self.options, False, name="generatorY2X")
-        self.F_Y = self.generator(self.Y, self.options, True, name="generatorY2X")
+        self.F_Y = self.generator(self.real_Y, self.options, True, name="generatorY2X")
         self.G_FY = self.generator(self.F_Y, self.options, True, name="generatorX2Y")
+        
         #Discriminator
         self.D_GX = self.discriminator(self.G_X, self.options, reuse=False, name="discriminatorY")
         self.D_FY = self.discriminator(self.F_Y, self.options, reuse=False, name="discriminatorX")
-        self.D_Y = self.discriminator(self.Y, self.options, reuse=True, name="discriminatorY")
-        self.D_X = self.discriminator(self.X, self.options, reuse=True, name="discriminatorX")
+        self.D_Y = self.discriminator(self.real_Y, self.options, reuse=True, name="discriminatorY")
+        self.D_X = self.discriminator(self.real_X, self.options, reuse=True, name="discriminatorX")
 
         #### Loss
         #generator loss
-        self.cycle_loss = md.cycle_loss(self.X, self.F_GX, self.Y, self.G_FY, args.L1_lambda)
+        self.cycle_loss = md.cycle_loss(self.real_X, self.F_GX, self.real_Y, self.G_FY, args.L1_lambda)
         self.G_loss_X2Y = md.least_square(self.D_GX, tf.ones_like(self.D_GX)) 
         self.G_loss_Y2X = md.least_square(self.D_FY, tf.ones_like(self.D_FY)) 
         
         if args.resid_loss:
-            self.residual_loss = md.residual_loss(self.X, self.G_X, self.F_GX, self.Y, self.F_Y,  self.G_FY, args.L1_lambda)
+            self.residual_loss = md.residual_loss(self.real_X, self.G_X, self.F_GX, self.real_Y, self.F_Y,  self.G_FY, args.L1_lambda)
             self.G_loss = self.G_loss_X2Y + self.G_loss_X2Y + self.cycle_loss + self.residual_loss
         else:
             self.G_loss = self.G_loss_X2Y + self.G_loss_X2Y + self.cycle_loss 
@@ -113,13 +142,15 @@ class cyclegan(object):
         self.d_sum = tf.summary.merge([self.D_loss_sum, self.D_loss_Y_sum, self.D_loss_GX_sum])
 
         #### image summary
-        self.real_img_summary = tf.concat([self.X, self.Y, self.G_X], axis = 2)
-        self.summary_image_1 = tf.summary.image('1_train_whole_image', self.real_img_summary)
-        self.summary_image_2 = tf.summary.image('2_test_whole_image', self.real_img_summary)
+        self.test_G_X = self.generator(self.X, self.options, True, name="generatorX2Y")
+        self.train_img_summary = tf.concat([self.real_X, self.real_Y, self.G_X], axis = 2)
+        self.summary_image_1 = tf.summary.image('1_train_whole_image', self.train_img_summary)
+        self.test_img_summary = tf.concat([self.X, self.Y, self.test_G_X], axis = 2)
+        self.summary_image_2 = tf.summary.image('2_test_whole_image', self.test_img_summary)
 
-        #### image summary
+        #### psnr summary
         self.summary_psnr_ldct = tf.summary.scalar("1_psnr_LDCT", ut.tf_psnr(self.X, self.Y, 2), family = 'PSNR')  #-1 ~ 1
-        self.summary_psnr_result = tf.summary.scalar("2_psnr_output", ut.tf_psnr(self.Y, self.G_X, 2), family = 'PSNR')  #-1 ~ 1
+        self.summary_psnr_result = tf.summary.scalar("2_psnr_output", ut.tf_psnr(self.Y, self.test_G_X, 2), family = 'PSNR')  #-1 ~ 1
         self.summary_psnr = tf.summary.merge([self.summary_psnr_ldct, self.summary_psnr_result])
 
         
@@ -153,30 +184,7 @@ class cyclegan(object):
         print('--------------------------------------------\n# of parameters : {} '.\
              format(np.sum([np.prod(v.get_shape().as_list()) for v in tf.trainable_variables()])))
         
-        """
-        load images
-        """
-        print('data load...') 
-        self.image_loader = ut.DCMDataLoader(args.dcm_path, args.LDCT_path, args.NDCT_path, \
-             image_size = args.whole_size, depth = args.img_channel,
-             image_max = args.img_vmax, image_min = args.img_vmin,\
-             is_unpair = args.unpair, model = args.model)
-                                     
-        self.test_image_loader = ut.DCMDataLoader(args.dcm_path, args.LDCT_path, args.NDCT_path,\
-             image_size = args.whole_size, depth = args.img_channel,
-             image_max = args.img_vmax, image_min = args.img_vmin,\
-             is_unpair = args.unpair, model = args.model)
 
-        t1 = time.time()
-        if args.phase == 'train':
-            self.image_loader(self.train_patent_no)
-            self.test_image_loader(self.test_patent_no)
-            print('data load complete !!!, {}\nN_train : {}, N_test : {}'.format(time.time() - t1, len(self.image_loader.LDCT_image_name), len(self.test_image_loader.LDCT_image_name)))
-        else:
-            self.test_image_loader(self.test_patent_no)
-            print('data load complete !!!, {}, N_test : {}'.format(time.time() - t1, len(self.test_image_loader.LDCT_image_name)))
-        
-        
     def train(self, args):
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
         self.sess.run(init_op)
@@ -190,30 +198,26 @@ class cyclegan(object):
             else:
                 print(" [!] Load failed...")
 
-        print('Start point : iter : {}'.format(self.start_step))
 
         #iteration -> epoch
-        self.start_epoch =  int(self.start_step / len(self.image_loader.LDCT_image_name))
+        self.start_epoch =  int((self.start_step + 1) / len(self.image_loader.LDCT_image_name))
 
+        print('Start point : iter : {}, epoch : {}'.format(self.start_step, self.start_epoch))    
+        
+        
         start_time = time.time()
         for epoch in range(self.start_epoch, args.end_epoch):
            
             batch_idxs = len(self.image_loader.LDCT_image_name)
 
+            #decay learning rate
             lr = args.lr / (10**int(epoch/ args.decay_epoch))
             
             for _ in range(0, batch_idxs):
-                
-               #get images
-                X, Y = self.image_loader.batch_generator() #patch batches
-                X, Y = X.reshape([-1] + self.X.get_shape().as_list()[1:]), \
-                                Y.reshape([-1] + self.Y.get_shape().as_list()[1:]), \
-                                                
                 # Update G network
-                F_Y, G_X, _, summary_str = self.sess.run(
-                    [self.F_Y, self.G_X, self.g_optim, self.g_sum],
-                    feed_dict={self.X : X,
-                               self.Y : Y, self.lr: lr})
+                
+                X, Y, F_Y, G_X, _, summary_str = self.sess.run(
+                    [self.real_X , self.real_Y, self.F_Y, self.G_X, self.g_optim, self.g_sum], feed_dict = { self.lr:lr})
 
                 self.writer.add_summary(summary_str, self.start_step)
 
@@ -222,12 +226,7 @@ class cyclegan(object):
 
                 # Update D network
                 _, summary_str = self.sess.run(
-                    [self.d_optim, self.d_sum],
-                    feed_dict={self.X : X, 
-                               self.Y : Y,
-                               self.F_Y : F_Y,
-                               self.G_X : G_X,
-                               self.lr: lr})
+                    [self.d_optim, self.d_sum],  feed_dict = {self.real_X:X , self.real_Y:Y, self.lr:lr})
 
                 self.writer.add_summary(summary_str, self.start_step)
 
@@ -237,12 +236,7 @@ class cyclegan(object):
                     print(("Epoch: {} {}/{} time: {} lr {}: ".format(epoch, currt_step, batch_idxs, time.time() - start_time, lr)))
                     
                     #summary trainig sample image
-                    summary_str1 = self.sess.run(
-                        self.summary_image_1,
-                        feed_dict={self.X : X.reshape([1] + self.X.get_shape().as_list()[1:]), 
-                                   self.Y : Y.reshape([1] + self.Y.get_shape().as_list()[1:]),
-                                   self.F_Y : F_Y.reshape([1] + self.F_Y.get_shape().as_list()[1:]),
-                                   self.G_X : G_X.reshape([1] + self.G_X.get_shape().as_list()[1:])})
+                    summary_str1 = self.sess.run(self.summary_image_1)
                     self.writer.add_summary(summary_str1, self.start_step)
                     
                     #check sample image
@@ -252,7 +246,9 @@ class cyclegan(object):
                     self.save(args.checkpoint_dir, self.start_step)
                 
                 self.start_step += 1
-
+        
+        self.image_loader.coord.request_stop()
+        self.image_loader.coord.join(self.image_loader.enqueue_threads)
     #summary test sample image during training
     def check_sample(self, args, idx):
         sltd_idx = np.random.choice(range(len(self.test_image_loader.LDCT_image_name)))
@@ -260,20 +256,18 @@ class cyclegan(object):
         sample_X_image, sample_Y_image  = self.test_image_loader.LDCT_images[sltd_idx], self.test_image_loader.NDCT_images[sltd_idx]
 
 
-        F_Y, G_X = self.sess.run(
-            [self.F_Y, self.G_X],
+        G_X = self.sess.run(
+            self.test_G_X,
             feed_dict={self.Y: sample_Y_image.reshape([1] + self.Y.get_shape().as_list()[1:]), 
             self.X: sample_X_image.reshape([1] + self.Y.get_shape().as_list()[1:])})
 
-        F_Y = np.array(F_Y).astype(np.float32)
         G_X = np.array(G_X).astype(np.float32)
 
         summary_str1, summary_str2 = self.sess.run(
             [self.summary_image_2, self.summary_psnr],
             feed_dict={self.X : sample_X_image.reshape([1] + self.X.get_shape().as_list()[1:]), 
                        self.Y : sample_Y_image.reshape([1] + self.Y.get_shape().as_list()[1:]),
-                       self.F_Y: F_Y.reshape([1] + self.F_Y.get_shape().as_list()[1:]),
-                       self.G_X: G_X.reshape([1] + self.G_X.get_shape().as_list()[1:])})
+                       self.test_G_X: G_X.reshape([1] + self.test_G_X.get_shape().as_list()[1:])})
       
         self.writer.add_summary(summary_str1, idx)
         self.writer.add_summary(summary_str2, idx)  
@@ -368,11 +362,10 @@ class cyclegan(object):
             
             
         ## test
-        start_time = time.time()
         for idx in range(len(self.test_image_loader.LDCT_images)):
-            test_X, test_Y  = self.test_image_loader.LDCT_images[idx], self.test_image_loader.NDCT_images[idx]
+            test_X = self.test_image_loader.LDCT_images[idx]
             
-            mk_G_X = self.sess.run(self.G_X, feed_dict={self.X: test_X.reshape([1] + self.X.get_shape().as_list()[1:])})
+            mk_G_X = self.sess.run(self.test_G_X, feed_dict={self.X: test_X.reshape([1] + self.X.get_shape().as_list()[1:])})
             
             save_file_nm_g = 'Gen_from_' + self.test_image_loader.LDCT_image_name[idx]
             

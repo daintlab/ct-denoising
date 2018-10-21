@@ -8,9 +8,10 @@ Created on Thu Oct 11 11:04:24 2018
 
 import argparse
 import os
+import sys
 import tensorflow as tf
-os.chdir(os.getcwd())
-from inout_util import *
+sys.path.extend([os.path.abspath("."), os.path.abspath("./../..")])
+import inout_util as ut
 from wgan_vgg_model import  wganVgg
 os.chdir(os.getcwd() + '/..')
 print('pwd : {}'.format(os.getcwd()))
@@ -20,7 +21,7 @@ parser = argparse.ArgumentParser(description='')
 parser.add_argument('--dcm_path', dest='dcm_path', default= '/data1/AAPM-Mayo-CT-Challenge', help='dicom file directory')
 parser.add_argument('--LDCT_path', dest='LDCT_path', default= 'quarter_3mm', help='LDCT image folder name')
 parser.add_argument('--NDCT_path', dest='NDCT_path', default= 'full_3mm', help='NDCT image folder name')
-parser.add_argument('--test_patient_no', dest='test_patient_no',type=ParseList, default= 'L067,L291')
+parser.add_argument('--test_patient_no', dest='test_patient_no',type=ut.ParseList, default= 'L067,L291')
 parser.add_argument('--pretrained_vgg', dest='pretrained_vgg', default='./pretrained_vgg', help='pretrained vggnet directory(only wgan_vgg)')
 
 #set save directory
@@ -51,10 +52,10 @@ parser.add_argument('--beta2', dest='beta2', type=float,  default=0.9, help='Ada
 
 
 #others
-parser.add_argument('--mayo_roi', dest='mayo_roi', type=ParseBoolean, default=True, help='summary ROI sample1,2')
-parser.add_argument('--save_freq', dest='save_freq', type=int, default=595, help='save a model every save_freq (iteration)')
+parser.add_argument('--mayo_roi', dest='mayo_roi', type=ut.ParseBoolean, default=True, help='summary ROI sample1,2')
+parser.add_argument('--save_freq', dest='save_freq', type=int, default=2000, help='save a model every save_freq (iteration)')
 parser.add_argument('--print_freq', dest='print_freq', type=int, default=100, help='print_freq (iterations)')
-parser.add_argument('--continue_train', dest='continue_train', type=ParseBoolean, default=True, help='load the latest model: true, false')
+parser.add_argument('--continue_train', dest='continue_train', type=ut.ParseBoolean, default=True, help='load the latest model: true, false')
 parser.add_argument('--gpu_no', dest='gpu_no', type=int,  default=0, help='gpu no')
 
 # -------------------------------------

@@ -15,12 +15,13 @@ from matplotlib import pyplot as plt
 from scipy.ndimage.interpolation import rotate
 import dicom
 from random import shuffle
+import threading
 
 class DCMDataLoader(object):
     def __init__(self, dcm_path, LDCT_image_path, NDCT_image_path, \
                  image_size = 512, patch_size = 64,  depth = 1, \
                  image_max = 3072, image_min = -1024, batch_size = 1, \
-                 is_unpair = False, model='', extension = 'IMA'):
+                 is_unpair = False, model='', num_threads = 4, extension = 'IMA'):
         
         #dicom file dir
         self.extension = extension
@@ -44,9 +45,12 @@ class DCMDataLoader(object):
         #CT slice name
         self.LDCT_image_name, self.NDCT_image_name = [], []
 
-        #N call batch generator
-        self.n_call_batgen =0
+        #batch generator  prameters 
+        self.num_threads = num_threads
+        self.capacity  =  100 * self.num_threads * self.batch_size
+        self.min_queue = 10 * self.num_threads * self.batch_size
         
+            
     #dicom file -> numpy array
     def __call__(self, patent_no_list):
         p_LDCT = []
@@ -65,12 +69,15 @@ class DCMDataLoader(object):
             self.NDCT_image_name.extend(NDCT_slice_nm)
 
             #normalization  
-            p_LDCT.append(normalize(org_LDCT_images, self.image_max , self.image_min, self.model))
-            p_NDCT.append(normalize(org_NDCT_images, self.image_max , self.image_min, self.model))
+            p_LDCT.append(self.normalize(org_LDCT_images, self.image_max , self.image_min, self.model))
+            p_NDCT.append(self.normalize(org_NDCT_images, self.image_max , self.image_min, self.model))
             
         self.LDCT_images = np.concatenate(tuple(p_LDCT), axis=0)
         self.NDCT_images = np.concatenate(tuple(p_NDCT), axis=0)
-             
+        
+        #image index
+        self.LDCT_index, self.NDCT_index = list(range(len(self.LDCT_images))), list(range(len(self.NDCT_images)))
+        
     def load_scan(self, path):
         slices = [dicom.read_file(s) for s in path]
         slices.sort(key=lambda x: float(x.ImagePositionPatient[2]))
@@ -94,7 +101,7 @@ class DCMDataLoader(object):
             intercept = slices[slice_number].RescaleIntercept
             slope = slices[slice_number].RescaleSlope
             if slope != 1:
-                image[slice_number] = slope * image[slice_number].astype(np.float64)
+                image[slice_number] = slope * image[slice_number].astype(np.float32)
                 image[slice_number] = image[slice_number].astype(np.int16)
             image[slice_number] += np.int16(intercept)
 
@@ -104,71 +111,8 @@ class DCMDataLoader(object):
             slice_nm.append(pre_fix_nm + '_' + d_idx)
         return np.array(image, dtype=np.int16), slice_nm
 
-    """
-    get overlapped random patches(WGAN_VGG, RED_CNN)
-    """
-    def get_randam_patches(self, whole_size, patch_size, batch_size, model='wgan_vgg'):
-        def augumentation(LDCT, NDCT):
-            sltd_idx = np.random.choice(range(3))
-            h,w = LDCT.shape
-            # rotation
-            if sltd_idx == 0 : 
-                return [rotate(LDCT, 45, reshape = False), rotate(NDCT, 45, reshape = False)]
-            #flipping
-            elif sltd_idx == 1:
-                flp = np.random.choice([True, False])
-                if flp: #horizontal
-                    return [LDCT[:, ::-1], NDCT[:, ::-1]]
-                else: # vertical 
-                    return [LDCT[::-1, :], NDCT[::-1, :]]
-            #scaling            
-            else: 
-                sf =  np.random.choice([0.5, 2])
-                return [LDCT * sf, NDCT * sf]
-
-            
-        whole_h =  whole_w = whole_size
-        h = w = patch_size
-
-        #patch image range
-        hd = h//2  
-        hu = int(whole_h - np.round(h/2))
-        wd = w//2  
-        wu = int(whole_w - np.round(w/2))
-
-        LDCT_patches, NDCT_patches = [], [] 
-
-        if model.lower() == 'red_cnn':
-            for i in range(batch_size):
-                #select random image(whole image)
-                slice_idx = np.random.choice(range(len(self.LDCT_images)))
-                LDCT, NDCT = self.LDCT_images[slice_idx], self.NDCT_images[slice_idx]
-
-                #patch image center(coordinate on whole image)
-                h_pc, w_pc  = np.random.choice(range(hd, hu+1)), np.random.choice(range(wd, wu+1))
-
-                #augumentation
-                [p_LDCT, p_NDCT] = augumentation(LDCT[h_pc - hd : int(h_pc + np.round(h/2)), w_pc - wd : int(w_pc + np.round(w/2))], \
-                             NDCT[h_pc - hd : int(h_pc + np.round(h/2)), w_pc - wd : int(w_pc + np.round(w/2))])
-                
-                LDCT_patches.append(p_LDCT)
-                NDCT_patches.append(p_NDCT)
-                
-        else:
-            for i in range(batch_size):
-                #select random image(whole image)
-                slice_idx = np.random.choice(range(len(self.LDCT_images)))
-                LDCT, NDCT = self.LDCT_images[slice_idx], self.NDCT_images[slice_idx]
-
-                #patch image center(coordinate on whole image)
-                h_pc, w_pc  = np.random.choice(range(hd, hu+1)), np.random.choice(range(wd, wu+1))
-                LDCT_patches.append(LDCT[h_pc - hd : int(h_pc + np.round(h/2)), w_pc - wd : int(w_pc + np.round(h/2))])
-                NDCT_patches.append(NDCT[h_pc - hd : int(h_pc + np.round(h/2)), w_pc - wd : int(w_pc + np.round(h/2))])
-                
-        return np.array(LDCT_patches), np.array(NDCT_patches)
-        
-        
     def normalize(self, img, max_ = 3072, min_=-1024, model ='cyclegan'):
+        img = img.astype(np.float32) 
         if model == 'cyclegan':  #-1 ~ 1
             img = 2 * ((img - min_) / (max_  -  min_)) -1
             return img
@@ -176,43 +120,112 @@ class DCMDataLoader(object):
             img = (img - min_) / (max_  -  min_)
             return img
 
-    def batch_generator(self):
-        if self.model.lower() == 'cyclegan':
-            def new_shuffle():
-                if self.is_unpair:
-                    shuffle(self.LDCT_index)
-                    shuffle(self.NDCT_index)
-                else:
-                    shuffle(self.LDCT_index)        
+    #RED CNN
+    def augumentation(self, LDCT, NDCT):
+            """
+            sltd_random_indx[0] : 
+                1: rotation
+                2. flipping
+                3. scaling
+                4. pass
+            sltd_random_indx[1] : 
+                select params
+            """
+            sltd_random_indx=  [np.random.choice(range(4)), np.random.choice(range(2))]
+            if sltd_random_indx[0] ==0 : 
+                return rotate(LDCT, 45, reshape = False), rotate(NDCT, 45, reshape = False)
+            elif sltd_random_indx[0] ==1 :
+                param  = [True, False][sltd_random_indx[1]]
+                if param:
+                    return LDCT[:, ::-1], NDCT[:, ::-1] #horizontal
+                return LDCT[::-1, :], NDCT[::-1, :] # vertical 
+            elif sltd_random_indx[0] ==2 :
+                param  = [0.5, 2][sltd_random_indx[1]]
+                return LDCT * param, NDCT * param
+            elif sltd_random_indx[0] ==3 :
+                return LDCT, NDCT
+            
+    #WGAN_VGG, RED_CNN
+    def get_randam_patches(self, LDCT_slice, NDCT_slice, patch_size, whole_size= 512, model='wgan_vgg'):
+        whole_h =  whole_w = whole_size
+        h = w = patch_size
 
-            if self.n_call_batgen == 0:
-                if self.is_unpair:
-                    self.LDCT_index, self.NDCT_index = list(range(len(self.LDCT_images))), list(range(len(self.NDCT_images)))
-                else:
-                    self.LDCT_index =  self.NDCT_index = list(range(len(self.LDCT_images)))
-                new_shuffle()    
-                self.LDCT_generator, self.NDCT_generator= iter(self.LDCT_images[self.LDCT_index]), iter(self.NDCT_images[self.NDCT_index])
-                self.n_call_batgen +=1
+        #patch image range
+        hd, hu = h//2, int(whole_h - np.round(h/2))
+        wd, wu = w//2, int(whole_w - np.round(w/2))
 
-            try:
-                return next(self.LDCT_generator), next(self.NDCT_generator)
-            except StopIteration:
-                new_shuffle()    
-                self.LDCT_generator, self.NDCT_generator= iter(self.LDCT_images[self.LDCT_index]), iter(self.NDCT_images[self.NDCT_index])
-                return next(self.LDCT_generator), next(self.NDCT_generator)
-        else:
-            return self.get_randam_patches(self.image_size, self.patch_size, self.batch_size, model = self.model)
+        #patch image center(coordinate on whole image)
+        h_pc, w_pc  = np.random.choice(range(hd, hu+1)), np.random.choice(range(wd, wu+1))
+        LDCT_patch = LDCT_slice[h_pc - hd : int(h_pc + np.round(h/2)), w_pc - wd : int(w_pc + np.round(h/2))]
+        NDCT_patch = NDCT_slice[h_pc - hd : int(h_pc + np.round(h/2)), w_pc - wd : int(w_pc + np.round(h/2))]
 
+        if self.model.lower() == 'red_cnn':
+            return self.augumentation(LDCT_patch, NDCT_patch)
+        return LDCT_patch, NDCT_patch
 
-def normalize(img, max_ = 3072, min_=-1024, model ='cyclegan'):
-    if model == 'cyclegan':  #-1 ~ 1
-        img = 2 * ((img - min_) / (max_  -  min_)) -1
-        return img
-    else: # 0 ~ 1
-        img = (img - min_) / (max_  -  min_)
-        return img
-    
+        
+    def input_pipeline(self, sess, image_size, end_point, depth = 1):
+        queue_input = tf.placeholder(tf.float32)
+        queue_output = tf.placeholder(tf.float32)
+        queue = tf.FIFOQueue(capacity=self.capacity, dtypes=[tf.float32, tf.float32], \
+                             shapes=[(image_size, image_size, depth), (image_size, image_size, depth)])
+        enqueue_op = queue.enqueue_many([queue_input, queue_output])
+        close_op = queue.close()
+        dequeue_op = queue.dequeue_many(self.batch_size)
 
+        def enqueue(coord):
+            enqueue_size = max(200, self.batch_size)
+            if self.model == 'cyclegan':
+                self.step = 0
+                while not coord.should_stop():
+                    start_pos = 0
+                    if self.is_unpair:
+                        shuffle(self.LDCT_index)
+                        shuffle(self.NDCT_index)
+                    else:
+                        self.NDCT_index = self.LDCT_index
+                        shuffle(self.LDCT_index)
+
+                    while start_pos < len(self.LDCT_index):
+                        end_pos = start_pos + enqueue_size
+                        raw_LDCT_chunk = self.LDCT_images[self.LDCT_index][start_pos: end_pos]
+                        raw_NDCT_chunk = self.NDCT_images[self.NDCT_index][start_pos: end_pos]
+                        
+                        
+                        sess.run(enqueue_op, feed_dict={queue_input: np.expand_dims(raw_LDCT_chunk, axis=-1), \
+                                                        queue_output: np.expand_dims(raw_NDCT_chunk, axis=-1)})
+                        start_pos += enqueue_size
+                self.step += 1
+                if self.step > end_point:
+                    coord.request_stop()
+                sess.run(close_op)
+            else:
+                self.step = 0
+                while not coord.should_stop():
+                    LDCT_imgs, NDCT_imgs = [], []
+                    for i in range(enqueue_size):
+                        sltd_idx = np.random.choice(self.LDCT_index)
+                        pat_LDCT, pat_NDCT = \
+                            self.get_randam_patches(self.LDCT_images[sltd_idx],
+                                self.NDCT_images[sltd_idx], image_size, model = self.model)
+                        LDCT_imgs.append(np.expand_dims(pat_LDCT, axis=-1))
+                        NDCT_imgs.append(np.expand_dims(pat_NDCT, axis=-1))
+                    sess.run(enqueue_op, feed_dict={queue_input: np.array(LDCT_imgs), \
+                                                    queue_output: np.array(NDCT_imgs)})
+                self.step += 1
+                if self.step > end_point:
+                    coord.request_stop()
+                sess.run(close_op)
+
+        self.coord = tf.train.Coordinator()
+        self.enqueue_threads = [threading.Thread(target=enqueue, args=(self.coord,)) for i in range(self.num_threads)]
+        for t in self.enqueue_threads: t.start()
+        
+        return dequeue_op
+
+        
+        
+                 
 #ROI crop
 def ROI_img(whole_image, row= [200, 350], col = [75, 225]):
    patch_ = whole_image[row[0]:row[1], col[0] : col[1]]
