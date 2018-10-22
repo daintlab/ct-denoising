@@ -21,7 +21,7 @@ class DCMDataLoader(object):
     def __init__(self, dcm_path, LDCT_image_path, NDCT_image_path, \
                  image_size = 512, patch_size = 64,  depth = 1, \
                  image_max = 3072, image_min = -1024, batch_size = 1, \
-                 is_unpair = False, model='', num_threads = 4, extension = 'IMA'):
+                 is_unpair = False, model='', num_threads = 1, extension = 'IMA'):
         
         #dicom file dir
         self.extension = extension
@@ -195,7 +195,7 @@ class DCMDataLoader(object):
                         sess.run(enqueue_op, feed_dict={queue_input: np.expand_dims(raw_LDCT_chunk, axis=-1), \
                                                         queue_output: np.expand_dims(raw_NDCT_chunk, axis=-1)})
                         start_pos += enqueue_size
-                self.step += 1
+                    self.step += 1
                 if self.step > end_point:
                     coord.request_stop()
                 sess.run(close_op)
@@ -212,7 +212,7 @@ class DCMDataLoader(object):
                         NDCT_imgs.append(np.expand_dims(pat_NDCT, axis=-1))
                     sess.run(enqueue_op, feed_dict={queue_input: np.array(LDCT_imgs), \
                                                     queue_output: np.array(NDCT_imgs)})
-                self.step += 1
+                    self.step += 1
                 if self.step > end_point:
                     coord.request_stop()
                 sess.run(close_op)
