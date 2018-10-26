@@ -1,6 +1,15 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Oct 11 11:04:24 2018
+
+@author: yeohyeongyu
+"""
+
 from __future__ import division
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
+import copy
+import numpy as np
 
 #### Generator & Discriminator 
 def discriminator(image, options, reuse=False, name="discriminator"):
@@ -92,14 +101,43 @@ def lrelu(x, leak=0.2, name="lrelu"):
     return tf.maximum(x, leak*x)
 
 #### loss
-def least_square(A, B):
-    return tf.reduce_mean((A - B)**2)
+def least_square(X, Y):
+    return tf.reduce_mean((X - Y)**2)
     
-def cycle_loss(R_A, F_A_, R_B, F_B_, lambda_):
-    return lambda_ * (tf.reduce_mean(tf.abs(R_A - F_A_)) + tf.reduce_mean(tf.abs(R_B - F_B_)))
+def cycle_loss(X, F_GX, Y, G_FY, lambda_):
+    return lambda_ * (tf.reduce_mean(tf.abs(X - F_GX)) + tf.reduce_mean(tf.abs(Y - G_FY)))
 
-def residual_loss(R_A, F_B, F_A_, R_B, F_A, F_B_, lambda_):
-    real_noise = R_A - R_B
+def residual_loss(X, F_B, F_GX, Y, F_A, G_FY, lambda_):
+    real_noise = X - Y
     fake_noise = F_B - F_A
-    fake_noise_ = F_A_ - F_B_
+    fake_noise_ = F_GX - G_FY
     return lambda_ * (tf.reduce_mean(tf.abs(real_noise - fake_noise)) + tf.reduce_mean(tf.abs(real_noise - fake_noise_)))
+
+   
+# cygle gan image pool
+class ImagePool(object):
+    def __init__(self, maxsize=50):
+        self.maxsize = maxsize
+        self.num_img = 0
+        self.images = []
+
+    def __call__(self, image):
+        if self.maxsize <= 0:
+            return image
+        if self.num_img < self.maxsize:
+            self.images.append(image)
+            self.num_img += 1
+            return image
+        if np.random.rand() > 0.5:
+            idx = int(np.random.rand()*self.maxsize)
+            tmp0 = copy.copy(self.images[idx])[0]
+            self.images[idx][0] = image[0]
+            tmp1 = copy.copy(self.images[idx])[1]
+            self.images[idx][1] = image[1]
+            tmp2 = copy.copy(self.images[idx])[2]
+            self.images[idx][2] = image[2]
+            tmp3 = copy.copy(self.images[idx])[3]
+            self.images[idx][3] = image[3]
+            return [tmp0, tmp1, tmp2, tmp3]
+        else:
+            return image
