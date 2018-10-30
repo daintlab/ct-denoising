@@ -212,7 +212,7 @@ class cyclegan(object):
 
             #decay learning rate
             if epoch > args.decay_epoch:
-                lr = args.lr - (epoch - (args.decay_epoch-1)) * ((args.lr / (args.end_epoch - args.decay_epoch)))
+                lr = args.lr - (epoch - (args.decay_epoch)) * ((args.lr / (args.end_epoch - args.decay_epoch)))
                                               
             for _ in range(0, batch_idxs):
                 # Update G network
