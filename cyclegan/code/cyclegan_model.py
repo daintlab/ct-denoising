@@ -206,6 +206,7 @@ class cyclegan(object):
         
         
         start_time = time.time()
+        lr = args.lr
         for epoch in range(self.start_epoch, args.end_epoch):
            
             batch_idxs = len(self.image_loader.LDCT_image_name)
