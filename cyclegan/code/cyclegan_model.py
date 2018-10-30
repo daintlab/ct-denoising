@@ -211,8 +211,9 @@ class cyclegan(object):
             batch_idxs = len(self.image_loader.LDCT_image_name)
 
             #decay learning rate
-            lr = args.lr / (10**int(epoch/ args.decay_epoch))
-            
+            if epoch > args.decay_epoch:
+                lr = args.lr - (epoch - (args.decay_epoch-1)) * ((args.lr / (args.end_epoch - args.decay_epoch)))
+                                              
             for _ in range(0, batch_idxs):
                 # Update G network
                 
