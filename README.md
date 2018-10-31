@@ -16,6 +16,7 @@
 > $ os.path.join(dcm_path, patent_no, [LDCT_path|NDCT_path], '*.' + extension)
 
 The dcm_path directory should look like:
+
     dcm_path
     ├── L067
     │   ├── quarter_3mm
