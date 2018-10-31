@@ -41,6 +41,7 @@ parser.add_argument('--phase', dest='phase', default='train', help='train or tes
 #train detail
 parser.add_argument('--num_iter', dest = 'num_iter', type = float, default = 200000, help = 'iterations')
 parser.add_argument('--alpha', dest='alpha', type=float,  default=1e-4, help='learning rate')
+parser.add_argument('--decay_rate', dest='decay_rate', type=float, default=0.99, help='learning rate decay rate')
 parser.add_argument('--batch_size', dest='batch_size', type=int,  default=128, help='batch size')
 
 
