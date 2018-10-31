@@ -66,7 +66,9 @@ class redCNN(object):
         self.t_vars = tf.trainable_variables()
 
         #### optimizer
-        self.optimizer = tf.train.AdamOptimizer(learning_rate= args.alpha).minimize(self.loss, var_list = self.t_vars)
+        self.global_step = tf.Variable(0, trainable=False)
+        self.learning_rate = tf.train.exponential_decay(args.alpha, self.global_step, args.num_iter, args.decay_rate, staircase=True)
+        self.optimizer = tf.train.AdamOptimizer(learning_rate= self.learning_rate).minimize(self.loss, var_list = self.t_vars, global_step=self.global_step)
 
         """
         summary
