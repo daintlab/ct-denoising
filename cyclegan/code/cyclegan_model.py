@@ -93,9 +93,9 @@ class cyclegan(object):
         
         if args.resid_loss:
             self.residual_loss = md.residual_loss(self.real_X, self.G_X, self.F_GX, self.real_Y, self.F_Y,  self.G_FY, args.L1_lambda)
-            self.G_loss = self.G_loss_X2Y + self.G_loss_X2Y + self.cycle_loss + self.residual_loss
+            self.G_loss = self.G_loss_X2Y + self.G_loss_Y2X + self.cycle_loss + self.residual_loss
         else:
-            self.G_loss = self.G_loss_X2Y + self.G_loss_X2Y + self.cycle_loss 
+            self.G_loss = self.G_loss_X2Y + self.G_loss_Y2X + self.cycle_loss 
 
         #dicriminator loss
         self.D_loss_real_Y = md.least_square(self.D_Y, tf.ones_like(self.D_Y))
