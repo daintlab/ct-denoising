@@ -111,7 +111,7 @@ class DCMDataLoader(object):
             slice_nm.append(pre_fix_nm + '_' + d_idx)
         return np.array(image, dtype=np.int16), slice_nm
 
-    def normalize(self, img, max_ = 3072, min_=-1024, model ='cyclegan'):
+    def normalize(self, img, max_ = 3072, min_=-1024, model =''):
         img = img.astype(np.float32) 
         if model == 'cyclegan':  #-1 ~ 1
             img = 2 * ((img - min_) / (max_  -  min_)) -1
@@ -146,7 +146,7 @@ class DCMDataLoader(object):
                 return LDCT, NDCT
             
     #WGAN_VGG, RED_CNN
-    def get_randam_patches(self, LDCT_slice, NDCT_slice, patch_size, whole_size= 512, model='wgan_vgg'):
+    def get_randam_patches(self, LDCT_slice, NDCT_slice, patch_size, whole_size= 512, model=''):
         whole_h =  whole_w = whole_size
         h = w = patch_size
 
@@ -204,10 +204,15 @@ class DCMDataLoader(object):
                 while not coord.should_stop():
                     LDCT_imgs, NDCT_imgs = [], []
                     for i in range(enqueue_size):
-                        sltd_idx = np.random.choice(self.LDCT_index)
+                        if self.is_unpair:
+                            L_sltd_idx = np.random.choice(self.LDCT_index)
+                            N_sltd_idx = np.random.choice(self.NDCT_index)
+                        else:
+                            L_sltd_idx = N_sltd_idx = np.random.choice(self.LDCT_index)
+                            
                         pat_LDCT, pat_NDCT = \
-                            self.get_randam_patches(self.LDCT_images[sltd_idx],
-                                self.NDCT_images[sltd_idx], image_size, model = self.model)
+                            self.get_randam_patches(self.LDCT_images[L_sltd_idx],
+                                self.NDCT_images[N_sltd_idx], image_size, model = self.model)
                         LDCT_imgs.append(np.expand_dims(pat_LDCT, axis=-1))
                         NDCT_imgs.append(np.expand_dims(pat_NDCT, axis=-1))
                     sess.run(enqueue_op, feed_dict={queue_input: np.array(LDCT_imgs), \
