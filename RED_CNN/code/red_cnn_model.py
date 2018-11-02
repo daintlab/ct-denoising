@@ -21,7 +21,14 @@ class redCNN(object):
         ####patients folder name
         self.train_patent_no = [d.split('/')[-1] for d in glob(args.dcm_path + '/*') if ('zip' not in d) & (d not in args.test_patient_no)]     
         self.test_patent_no = args.test_patient_no    
-        
+
+        #save directory
+        self.p_info = '_'.join(self.test_patent_no)
+        self.checkpoint_dir = os.path.join('.', args.checkpoint_dir, self.p_info)
+        self.log_dir = os.path.join('.', 'logs',  self.p_info)
+        print('directory check!!\ncheckpoint : {}\ntensorboard_logs : {}'.format(self.checkpoint_dir, self.log_dir))
+
+
         #### set modules
         self.red_cnn = modules.redcnn
         
@@ -85,19 +92,7 @@ class redCNN(object):
         self.summary_train_image = tf.summary.image('0_train_image', self.check_img_summary)                                    
         self.whole_img_summary = tf.concat([self.whole_X, self.whole_Y, self.WHOLE_output_img], axis = 2)        
         self.summary_image = tf.summary.image('1_whole_image', self.whole_img_summary)
-
-        #ROI summary
-        if args.mayo_roi:
-            self.ROI_X =  tf.placeholder(tf.float32, [None, 128, 128, args.img_channel], name='ROI_X')
-            self.ROI_Y =  tf.placeholder(tf.float32, [None, 128, 128, args.img_channel], name='ROI_Y')
-            self.ROI_output = self.red_cnn(self.ROI_X)
-
-            self.ROI_real_img_summary = tf.concat([self.ROI_X, self.ROI_Y, self.ROI_output], axis = 2)
-            self.summary_ROI_image_1 = tf.summary.image('2_ROI_image_1', self.ROI_real_img_summary)
-            self.summary_ROI_image_2 = tf.summary.image('3_ROI_image_2', self.ROI_real_img_summary)
         
-
-                
         #model saver
         self.saver = tf.train.Saver(max_to_keep=None)    
 
@@ -106,11 +101,11 @@ class redCNN(object):
         
     def train(self, args):
         self.sess.run(tf.global_variables_initializer())
-        self.writer = tf.summary.FileWriter("./logs", self.sess.graph)
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
 
         self.start_step = 0
         if args.continue_train:
-            if self.load(args.checkpoint_dir):
+            if self.load():
                 print(" [*] Load SUCCESS")
             else:
                 print(" [!] Load failed...")
@@ -137,7 +132,7 @@ class redCNN(object):
                 self.check_sample(args, t)
 
             if (t+1) % args.save_freq == 0:
-                self.save(t, args.checkpoint_dir)
+                self.save(args, t)
 
         self.image_loader.coord.request_stop()
         self.image_loader.coord.join(self.image_loader.enqueue_threads)
@@ -159,77 +154,24 @@ class redCNN(object):
         self.writer.add_summary(summary_str1, t)
         self.writer.add_summary(summary_str2, t)
 
-        """
-            summary ROI IMAGE
-        """
-        if args.mayo_roi:
-            ROI_sample = [['067', '0203', [161, 289], [61, 189]],
-                        ['291', '0196', [111, 239], [111, 239]]]
-            
-            LDCT_ROI_idx = [self.test_image_loader.LDCT_image_name.index(\
-                'L{}_{}_{}'.format(s[0], args.LDCT_path, s[1])) for s in ROI_sample]
-            
-            NDCT_ROI_idx = [self.test_image_loader.NDCT_image_name.index(\
-                'L{}_{}_{}'.format(s[0], args.NDCT_path, s[1])) for s in ROI_sample]
-
-
-            RIO_LDCT  = [self.test_image_loader.LDCT_images[idx] for idx in LDCT_ROI_idx]
-            RIO_NDCT  = [self.test_image_loader.NDCT_images[idx] for idx in NDCT_ROI_idx]
-
-            ROI_LDCT_arr = [ut.ROI_img(RIO_LDCT[0], row = ROI_sample[0][2], col = ROI_sample[0][3]), \
-                            ut.ROI_img(RIO_LDCT[1], row = ROI_sample[1][2], col = ROI_sample[1][3])]
-
-            ROI_NDCT_arr = [ut.ROI_img(RIO_NDCT[0], row = ROI_sample[0][2], col = ROI_sample[0][3]), \
-                            ut.ROI_img(RIO_NDCT[1], row = ROI_sample[1][2], col = ROI_sample[1][3])]
-            
-            ROI_output_1 = self.sess.run(
-                self.ROI_output,  feed_dict={
-                self.ROI_X :  ROI_LDCT_arr[0].reshape([1] + self.ROI_X.get_shape().as_list()[1:])})
-
-            ROI_output_2 = self.sess.run(
-                self.ROI_output,  feed_dict={
-                self.ROI_X :  ROI_LDCT_arr[1].reshape([1] + self.ROI_X.get_shape().as_list()[1:])})
-
-
-            ROI_output_1, ROI_output_2 = np.array(ROI_output_1).astype(np.float32), np.array(ROI_output_2).astype(np.float32)
-
-            roi_summary_str1 = self.sess.run(
-                self.summary_ROI_image_1,
-                feed_dict={self.ROI_X : ROI_LDCT_arr[0].reshape([1] + self.ROI_X.get_shape().as_list()[1:]), 
-                           self.ROI_Y : ROI_NDCT_arr[0].reshape([1] + self.ROI_Y.get_shape().as_list()[1:]),
-                           self.ROI_output: ROI_output_1.reshape([1] + self.ROI_output.get_shape().as_list()[1:])})
-
-            roi_summary_str2  = self.sess.run(
-                self.summary_ROI_image_2,
-                feed_dict={self.ROI_X : ROI_LDCT_arr[1].reshape([1] + self.ROI_X.get_shape().as_list()[1:]), 
-                           self.ROI_Y : ROI_NDCT_arr[1].reshape([1] + self.ROI_Y.get_shape().as_list()[1:]),
-                           self.ROI_output: ROI_output_2.reshape([1] + self.ROI_output.get_shape().as_list()[1:])})
-
-            self.writer.add_summary(roi_summary_str1, t)
-            self.writer.add_summary(roi_summary_str2, t)
-
-
-    
-    def save(self, step, checkpoint_dir = 'checkpoint'):
-        model_name = "red_cnn.model"
-        checkpoint_dir = os.path.join('.', checkpoint_dir)
-        if not os.path.exists(checkpoint_dir):
-            os.makedirs(checkpoint_dir)
+        
+    def save(self, args, step):
+        model_name = args.model+".model"
+        if not os.path.exists(self.checkpoint_dir):
+            os.makedirs(self.checkpoint_dir)
 
         self.saver.save(self.sess,
-                        os.path.join(checkpoint_dir, model_name),
+                        os.path.join(self.checkpoint_dir, model_name),
                         global_step=step)
 
 
-    def load(self, checkpoint_dir = 'checkpoint'):
+    def load(self):
         print(" [*] Reading checkpoint...")
-        checkpoint_dir = os.path.join('.', checkpoint_dir)
-
-        ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+        ckpt = tf.train.get_checkpoint_state(self.checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
             self.start_step = int(ckpt_name.split('-')[-1])
-            self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
+            self.saver.restore(self.sess, os.path.join(self.checkpoint_dir, ckpt_name))
             print(self.start_step)
             return True
         else:
@@ -239,7 +181,7 @@ class redCNN(object):
     def test(self, args):
         self.sess.run(tf.global_variables_initializer())
 
-        if self.load(args.checkpoint_dir):
+        if self.load():
             print(" [*] Load SUCCESS")
         else:
             print(" [!] Load failed...")

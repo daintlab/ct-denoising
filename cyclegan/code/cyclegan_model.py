@@ -21,8 +21,15 @@ class cyclegan(object):
         self.sess = sess        
         
         ####patients folder name
-        self.train_patent_no = [d.split('/')[-1] for d in glob(args.dcm_path + '/*') if ('zip' not in d) & (d not in args.test_patient_no)]     
-        self.test_patent_no = args.test_patient_no    
+        self.train_patient_no = [d.split('/')[-1] for d in glob(args.dcm_path + '/*') if ('zip' not in d) & (d not in args.test_patient_no)]     
+        self.test_patient_no = args.test_patient_no    
+
+        
+        #save directory
+        self.p_info = '_'.join(self.test_patient_no)
+        self.checkpoint_dir = os.path.join('.', args.checkpoint_dir, self.p_info)
+        self.log_dir = os.path.join('.', 'logs',  self.p_info)
+        print('directory check!!\ncheckpoint : {}\ntensorboard_logs : {}'.format(self.checkpoint_dir, self.log_dir))
 
         #module
         self.discriminator = md.discriminator
@@ -51,12 +58,12 @@ class cyclegan(object):
 
         t1 = time.time()
         if args.phase == 'train':
-            self.image_loader(self.train_patent_no)
-            self.test_image_loader(self.test_patent_no)
+            self.image_loader(self.train_patient_no)
+            self.test_image_loader(self.test_patient_no)
             print('data load complete !!!, {}\nN_train : {}, N_test : {}'.format(time.time() - t1, len(self.image_loader.LDCT_image_name), len(self.test_image_loader.LDCT_image_name)))
             [self.real_X , self.real_Y] = self.image_loader.input_pipeline(self.sess, args.whole_size, args.end_epoch)
         else:
-            self.test_image_loader(self.test_patent_no)
+            self.test_image_loader(self.test_patient_no)
             print('data load complete !!!, {}, N_test : {}'.format(time.time() - t1, len(self.test_image_loader.LDCT_image_name)))
         
             self.real_X =  tf.placeholder(tf.float32, [None, args.whole_size, args.whole_size, args.img_channel], name = 'LDCT')
@@ -153,28 +160,6 @@ class cyclegan(object):
         self.summary_psnr_result = tf.summary.scalar("2_psnr_output", ut.tf_psnr(self.Y, self.test_G_X, 2), family = 'PSNR')  #-1 ~ 1
         self.summary_psnr = tf.summary.merge([self.summary_psnr_ldct, self.summary_psnr_result])
 
-        
-        #for RIO summary
-        if args.mayo_roi:
-            #place hold
-            self.ROI_X =  tf.placeholder(tf.float32, [None, 128, 128, args.img_channel], name='ROI_X')
-            self.ROI_Y =  tf.placeholder(tf.float32, [None, 128, 128, args.img_channel], name='ROI_Y')
-        
-            #fakeB for ROI
-            self.ROI_GX = self.generator(self.ROI_X, self.options, True, name="generatorX2Y")
-
-            #image summary
-            self.ROI_real_img_summary = tf.concat([self.ROI_X, self.ROI_Y, self.ROI_GX], axis = 2)
-            self.summary_ROI_image_1 = tf.summary.image('3_ROI_image_1', self.ROI_real_img_summary)
-            self.summary_ROI_image_2 = tf.summary.image('4_ROI_image_2', self.ROI_real_img_summary)
-            #psnr summary
-            self.summary_ROI_psnr_ldct_1 = tf.summary.scalar("3_ROI_psnr_LDCT_1", ut.tf_psnr(self.ROI_X, self.ROI_Y, 2), family = 'PSNR')  #-1 ~ 1
-            self.summary_ROI_psnr_result_1 = tf.summary.scalar("4_ROI_psnr_output_1", ut.tf_psnr(self.ROI_Y, self.ROI_GX, 2), family = 'PSNR')  #-1 ~ 1
-            self.summary_ROI_psnr_ldct_2 = tf.summary.scalar("5_ROI_psnr_LDCT_2", ut.tf_psnr(self.ROI_X, self.ROI_Y, 2), family = 'PSNR')  #-1 ~ 1
-            self.summary_ROI_psnr_result_2 = tf.summary.scalar("6_ROI_psnr_output_2", ut.tf_psnr(self.ROI_Y, self.ROI_GX, 2), family = 'PSNR')  #-1 ~ 1
-            self.summary_ROI_psnr_1 = tf.summary.merge([self.summary_ROI_psnr_ldct_1, self.summary_ROI_psnr_result_1])
-            self.summary_ROI_psnr_2 = tf.summary.merge([self.summary_ROI_psnr_ldct_2, self.summary_ROI_psnr_result_2])
-       
         #model saver
         self.saver = tf.train.Saver(max_to_keep=None)
         #image pool
@@ -188,12 +173,12 @@ class cyclegan(object):
     def train(self, args):
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
         self.sess.run(init_op)
-        self.writer = tf.summary.FileWriter("./logs", self.sess.graph)
+        self.writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
 
         #pretrained model load
         self.start_step = 0 #load SUCESS -> self.start_step 파일명에 의해 초기화... // failed -> 0
         if args.continue_train:
-            if self.load(args.checkpoint_dir):
+            if self.load():
                 print(" [*] Load SUCCESS")
             else:
                 print(" [!] Load failed...")
@@ -245,7 +230,7 @@ class cyclegan(object):
                     self.check_sample(args, self.start_step)
 
                 if (self.start_step+1) % args.save_freq == 0:
-                    self.save(args.checkpoint_dir, self.start_step)
+                    self.save(args, self.start_step)
                 
                 self.start_step += 1
         
@@ -274,75 +259,28 @@ class cyclegan(object):
         self.writer.add_summary(summary_str1, idx)
         self.writer.add_summary(summary_str2, idx)  
 
-        if args.mayo_roi:
-            ROI_sample = [['067', '0203', [161, 289], [61, 189]],
-                        ['291', '0196', [111, 239], [111, 239]]]
-            
-            LDCT_ROI_idx = [self.test_image_loader.LDCT_image_name.index(\
-                'L{}_{}_{}'.format(s[0], args.LDCT_path, s[1])) for s in ROI_sample]
-            
-            NDCT_ROI_idx = [self.test_image_loader.NDCT_image_name.index(\
-                'L{}_{}_{}'.format(s[0], args.NDCT_path, s[1])) for s in ROI_sample]
-
-
-            RIO_LDCT  = [self.test_image_loader.LDCT_images[idx] for idx in LDCT_ROI_idx]
-            RIO_NDCT  = [self.test_image_loader.NDCT_images[idx] for idx in NDCT_ROI_idx]
-
-            ROI_LDCT_arr = [ut.ROI_img(RIO_LDCT[0], row = ROI_sample[0][2], col = ROI_sample[0][3]), \
-                            ut.ROI_img(RIO_LDCT[1], row = ROI_sample[1][2], col = ROI_sample[1][3])]
-
-            ROI_NDCT_arr = [ut.ROI_img(RIO_NDCT[0], row = ROI_sample[0][2], col = ROI_sample[0][3]), \
-                            ut.ROI_img(RIO_NDCT[1], row = ROI_sample[1][2], col = ROI_sample[1][3])]
-            
-                
-            ROI_GX_1 = self.sess.run(
-                self.ROI_GX,  feed_dict={
-                self.ROI_X :  ROI_LDCT_arr[0].reshape([1] + self.ROI_X.get_shape().as_list()[1:])})
-            
-            ROI_GX_2 = self.sess.run(
-                self.ROI_GX,  feed_dict={
-                self.ROI_X :  ROI_LDCT_arr[1].reshape([1] + self.ROI_X.get_shape().as_list()[1:])})
-            
-            
-            roi_summary_str1, roi_summary_str2 = self.sess.run(
-                [self.summary_ROI_image_1, self.summary_ROI_psnr_1],
-                feed_dict={self.ROI_X : ROI_LDCT_arr[0].reshape([1] + self.ROI_X.get_shape().as_list()[1:]), 
-                           self.ROI_Y : ROI_NDCT_arr[0].reshape([1] + self.ROI_Y.get_shape().as_list()[1:]),
-                           self.ROI_GX: ROI_GX_1.reshape([1] + self.ROI_GX.get_shape().as_list()[1:])})
-            
-            roi_summary_str3, roi_summary_str4 = self.sess.run(
-                [self.summary_ROI_image_2, self.summary_ROI_psnr_2],
-                feed_dict={self.ROI_X : ROI_LDCT_arr[1].reshape([1] + self.ROI_X.get_shape().as_list()[1:]), 
-                           self.ROI_Y : ROI_NDCT_arr[1].reshape([1] + self.ROI_Y.get_shape().as_list()[1:]),
-                           self.ROI_GX: ROI_GX_2.reshape([1] + self.ROI_GX.get_shape().as_list()[1:])})
-            self.writer.add_summary(roi_summary_str1, idx)
-            self.writer.add_summary(roi_summary_str2, idx)
-            self.writer.add_summary(roi_summary_str3, idx)
-            self.writer.add_summary(roi_summary_str4, idx)
-        
-                
     # save model    
-    def save(self, checkpoint_dir,  step):
-        model_name = "cyclegan.model"
-        checkpoint_dir = os.path.join('.', checkpoint_dir)
+    def save(self, args, step):
+        model_name = args.model+".model"
+        self.checkpoint_dir = os.path.join('.', self.checkpoint_dir)
 
-        if not os.path.exists(checkpoint_dir):
-            os.makedirs(checkpoint_dir)
+        if not os.path.exists(self.checkpoint_dir):
+            os.makedirs(self.checkpoint_dir)
 
         self.saver.save(self.sess,
-                        os.path.join(checkpoint_dir, model_name),
+                        os.path.join(self.checkpoint_dir, model_name),
                         global_step=step)
 
     # load model    
-    def load(self, checkpoint_dir = 'checkpoint'):
+    def load(self):
         print(" [*] Reading checkpoint...")
-        checkpoint_dir = os.path.join('.', checkpoint_dir)
+        self.checkpoint_dir = os.path.join('.', self.checkpoint_dir)
 
-        ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+        ckpt = tf.train.get_checkpoint_state(self.checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
             self.start_step = int(ckpt_name.split('-')[-1])
-            self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
+            self.saver.restore(self.sess, os.path.join(self.checkpoint_dir, ckpt_name))
             return True
         else:
             return False
@@ -351,13 +289,13 @@ class cyclegan(object):
     def test(self, args):
         self.sess.run(tf.global_variables_initializer())
 
-        if self.load(args.checkpoint_dir):
+        if self.load():
             print(" [*] Load SUCCESS")
         else:
             print(" [!] Load failed...")
 
         ## mk save dir (image & numpy file)    
-        npy_save_dir = os.path.join('.', args.test_npy_save_dir)
+        npy_save_dir = os.path.join('.', args.test_npy_save_dir, self.p_info)
 
         if not os.path.exists(npy_save_dir):
             os.makedirs(npy_save_dir)

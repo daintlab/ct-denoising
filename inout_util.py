@@ -47,7 +47,7 @@ class DCMDataLoader(object):
 
         #batch generator  prameters 
         self.num_threads = num_threads
-        self.capacity  =  100 * self.num_threads * self.batch_size
+        self.capacity  =  20 * self.num_threads * self.batch_size
         self.min_queue = 10 * self.num_threads * self.batch_size
         
             
