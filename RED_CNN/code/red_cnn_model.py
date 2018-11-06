@@ -187,7 +187,7 @@ class redCNN(object):
             print(" [!] Load failed...")
 
         ## mk save dir (image & numpy file)    
-        npy_save_dir = os.path.join('.', args.test_npy_save_dir)
+        npy_save_dir = os.path.join('.', args.test_npy_save_dir, self.p_info)
 
         if not os.path.exists(npy_save_dir):
             os.makedirs(npy_save_dir)

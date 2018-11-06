@@ -50,7 +50,7 @@ parser.add_argument('--ngf', dest='ngf', type=int, default=32, help='# of gen fi
 parser.add_argument('--ndf', dest='ndf', type=int, default=64, help='# of discri filters in first conv layer')
 
 #others
-parser.add_argument('--save_freq', dest='save_freq', type=int, default=2378, help='save a model every save_freq (iteration)')
+parser.add_argument('--save_freq', dest='save_freq', type=int, default=2000, help='save a model every save_freq (iteration)')
 parser.add_argument('--print_freq', dest='print_freq', type=int, default=100, help='print_freq (iterations)')
 parser.add_argument('--continue_train', dest='continue_train', type=ut.ParseBoolean, default=True, help='load the latest model: true, false')
 parser.add_argument('--gpu_no', dest='gpu_no', type=int,  default=0, help='gpu no')
