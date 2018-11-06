@@ -24,8 +24,8 @@ parser.add_argument('--NDCT_path', dest='NDCT_path', default= 'full_3mm', help='
 parser.add_argument('--test_patient_no', dest='test_patient_no',type=ut.ParseList, default= 'L067,L291')
 
 #set save directory
-parser.add_argument('--checkpoint_dir', dest='checkpoint_dir',  default='checkpoint', help='check point dir')
-parser.add_argument('--test_npy_save_dir', dest='test_npy_save_dir',  default='./test', help='test numpy file save dir')
+parser.add_argument('--checkpoint_dir', dest='checkpoint_dir',  default='/data/private/RED_CNN/checkpoint', help='check point dir')
+parser.add_argument('--test_npy_save_dir', dest='test_npy_save_dir',  default='/data/private/RED_CNN/test', help='test numpy file save dir')
 
 #image info
 parser.add_argument('--patch_size', dest='patch_size', type=int,  default=55, help='image patch size, h=w')
