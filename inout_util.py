@@ -72,6 +72,10 @@ class DCMDataLoader(object):
             p_LDCT.append(self.normalize(org_LDCT_images, self.image_max , self.image_min, self.model))
             p_NDCT.append(self.normalize(org_NDCT_images, self.image_max , self.image_min, self.model))
             
+        if self.model == 'smgan':
+            e_patent_len = [len(p_LDCT[i]) for i in range(len(p_LDCT))]
+            self.e_patent_end_idx = [sum(e_patent_len[0:i+1]) for i in range(len(e_patent_len))]
+
         self.LDCT_images = np.concatenate(tuple(p_LDCT), axis=0)
         self.NDCT_images = np.concatenate(tuple(p_NDCT), axis=0)
         
@@ -156,8 +160,12 @@ class DCMDataLoader(object):
 
         #patch image center(coordinate on whole image)
         h_pc, w_pc  = np.random.choice(range(hd, hu+1)), np.random.choice(range(wd, wu+1))
-        LDCT_patch = LDCT_slice[h_pc - hd : int(h_pc + np.round(h/2)), w_pc - wd : int(w_pc + np.round(h/2))]
-        NDCT_patch = NDCT_slice[h_pc - hd : int(h_pc + np.round(h/2)), w_pc - wd : int(w_pc + np.round(h/2))]
+        if len(LDCT_slice.shape) == 3: # 3d patch
+            LDCT_patch = LDCT_slice[:, h_pc - hd: int(h_pc + np.round(h / 2)), w_pc - wd: int(w_pc + np.round(h / 2))]
+            NDCT_patch = NDCT_slice[:, h_pc - hd: int(h_pc + np.round(h / 2)), w_pc - wd: int(w_pc + np.round(h / 2))]
+        else: # 2d patch
+            LDCT_patch = LDCT_slice[h_pc - hd : int(h_pc + np.round(h/2)), w_pc - wd : int(w_pc + np.round(h/2))]
+            NDCT_patch = NDCT_slice[h_pc - hd : int(h_pc + np.round(h/2)), w_pc - wd : int(w_pc + np.round(h/2))]
 
         if self.model.lower() == 'red_cnn':
             return self.augumentation(LDCT_patch, NDCT_patch)
@@ -195,6 +203,27 @@ class DCMDataLoader(object):
                         sess.run(enqueue_op, feed_dict={queue_input: np.expand_dims(raw_LDCT_chunk, axis=-1), \
                                                         queue_output: np.expand_dims(raw_NDCT_chunk, axis=-1)})
                         start_pos += enqueue_size
+                    self.step += 1
+                if self.step > end_point:
+                    coord.request_stop()
+                sess.run(close_op)
+             elif self.model == 'smgan': # 3d patch
+                self.step = 0
+                while not coord.should_stop():
+                    LDCT_imgs, NDCT_imgs = [], []
+                    for i in range(enqueue_size):
+                        while True:
+                            sltd_idx = np.random.choice(self.LDCT_index[:-2])
+                            except_idx = [j for i in self.e_patent_end_idx for j in range(i-2,i)]
+                            if sltd_idx not in except_idx: break
+
+                        pat_LDCT, pat_NDCT = self.get_random_patches(self.LDCT_images[sltd_idx:sltd_idx+3], 
+                                                                     self.NDCT_images[sltd_idx:sltd_idx+3], 
+                                                                     image_size, model=self.model)
+                        LDCT_imgs.append(np.expand_dims(pat_LDCT, axis=1))
+                        NDCT_imgs.append(np.expand_dims(pat_NDCT, axis=1))
+                    sess.run(enqueue_op, feed_dict={queue_input: np.array(LDCT_imgs),
+                                                    queue_output: np.array(NDCT_imgs)})
                     self.step += 1
                 if self.step > end_point:
                     coord.request_stop()
