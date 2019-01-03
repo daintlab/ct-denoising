@@ -14,6 +14,32 @@
 * Input data Directory  
   * DICOM file extension = [<b>'.IMA'</b>, '.dcm']
 > $ os.path.join(dcm_path, patent_no, [LDCT_path|NDCT_path], '*.' + extension)
+
+The dcm_path directory should look like:
+
+    dcm_path
+    ├── L067
+    │   ├── quarter_3mm
+    │   │       ├── L067_QD_3_1.CT.0004.0001 ~ .IMA
+    │   │       ├── L067_QD_3_1.CT.0004.0002 ~ .IMA
+    │   │       └── ...
+    │   └── full_3mm
+    │           ├── L067_FD_3_1.CT.0004.0001 ~ .IMA
+    │           ├── L067_FD_3_1.CT.0004.0002 ~ .IMA
+    │           └── ...
+    ├── L096
+    │   ├── quarter_3mm
+    │   │       └── ...
+    │   └── full_3mm
+    │           └── ...      
+    ...
+    │
+    └── L506
+        ├── quarter_3mm
+        │       └── ...
+        └── full_3mm
+                └── ...     
+
 ## [Common] Main file(main.py) Parameters
 * Directory
 > * dcm_path : dicom file directory
