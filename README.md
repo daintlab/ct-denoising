@@ -45,8 +45,10 @@ The dcm_path directory should look like:
 > * dcm_path : dicom file directory
 > * LDCT_path : LDCT image folder name
 > * NDCT_path : NDCT image folder name
-> * test_patient_no : default : L067,L291
+> * test_patient_no : test patient id list(p_id1,p_id2...) (train patient id : (patient id list - test patient id list)
+> * result : save result dir(check point, test, log, summary params)
 > * checkpoint_dir : save directory - trained model
+> * log_dir : save directory - tensoroard model
 > * test_npy_save_dir : save directory - test numpy file
 > * pretrained_vgg : pretrained vggnet directory(only WGAN_VGG)
 * Image info
@@ -56,7 +58,6 @@ The dcm_path directory should look like:
 > * img_vmax : max value
 > * img_vmin : min value
 * Train/Test
-> * model : red_cnn, wgan_vgg, cyclegan (for image preprocessing)
 > * phase : train | test
 * others
 > * is_mayo : summary ROI sample1,2

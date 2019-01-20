@@ -13,6 +13,7 @@ import time
 from glob import glob
 import red_cnn_module as modules
 import inout_util as ut
+from random import shuffle
 
 class redCNN(object):
     def __init__(self, sess, args):
@@ -24,8 +25,8 @@ class redCNN(object):
 
         #save directory
         self.p_info = '_'.join(self.test_patent_no)
-        self.checkpoint_dir = os.path.join('.', args.checkpoint_dir, self.p_info)
-        self.log_dir = os.path.join('.', 'logs',  self.p_info)
+        self.checkpoint_dir = os.path.join(args.result, args.checkpoint_dir, self.p_info)
+        self.log_dir = os.path.join(args.result, args.log_dir,  self.p_info)
         print('directory check!!\ncheckpoint : {}\ntensorboard_logs : {}'.format(self.checkpoint_dir, self.log_dir))
 
 
@@ -36,29 +37,33 @@ class redCNN(object):
         load images
         """
         print('data load... dicom -> numpy') 
-        self.image_loader = ut.DCMDataLoader(args.dcm_path, args.LDCT_path, args.NDCT_path, \
-             image_size = args.whole_size, patch_size = args.patch_size, depth = args.img_channel,
-             image_max = args.img_vmax, image_min = args.img_vmin, batch_size = args.batch_size, model = args.model)
+        self.image_loader = ut.DCMDataLoader(\
+              args.dcm_path, args.LDCT_path, args.NDCT_path, \
+             image_size = args.whole_size, patch_size = args.patch_size, \
+             depth = args.img_channel, image_max = args.img_vmax, image_min = args.img_vmin,\
+             is_unpair = args.is_unpair, augument = args.augument, norm = args.norm)
                                      
-        self.test_image_loader = ut.DCMDataLoader(args.dcm_path, args.LDCT_path, args.NDCT_path,\
-             image_size = args.whole_size, patch_size = args.patch_size, depth = args.img_channel,
-             image_max = args.img_vmax, image_min = args.img_vmin, batch_size = args.batch_size, model = args.model)
-
+        self.test_image_loader = ut.DCMDataLoader(\
+             args.dcm_path, args.LDCT_path, args.NDCT_path,\
+             image_size = args.whole_size, patch_size = args.patch_size, \
+              depth = args.img_channel, image_max = args.img_vmax, image_min = args.img_vmin,\
+             is_unpair = args.is_unpair, augument = args.augument, norm = args.norm)
+        
         t1 = time.time()
         if args.phase == 'train':
             self.image_loader(self.train_patent_no)
             self.test_image_loader(self.test_patent_no)
             print('data load complete !!!, {}\nN_train : {}, N_test : {}'.format(time.time() - t1, len(self.image_loader.LDCT_image_name), len(self.test_image_loader.LDCT_image_name)))
-            [self.X, self.Y] = self.image_loader.input_pipeline(self.sess, args.patch_size, args.num_iter)
         else:
             self.test_image_loader(self.test_patent_no)
             print('data load complete !!!, {}, N_test : {}'.format(time.time() - t1, len(self.test_image_loader.LDCT_image_name)))
-            self.X = tf.placeholder(tf.float32, [None, args.patch_size, args.patch_size, args.img_channel], name = 'LDCT')
-            self.Y = tf.placeholder(tf.float32, [None, args.patch_size, args.patch_size, args.img_channel], name = 'NDCT')
+            
         
         """
         build model
         """
+        self.X = tf.placeholder(tf.float32, [None, args.patch_size, args.patch_size, args.img_channel], name = 'LDCT')
+        self.Y = tf.placeholder(tf.float32, [None, args.patch_size, args.patch_size, args.img_channel], name = 'NDCT')
         self.whole_X = tf.placeholder(tf.float32, [1, args.whole_size, args.whole_size, args.img_channel], name = 'whole_LDCT')
         self.whole_Y = tf.placeholder(tf.float32, [1, args.whole_size, args.whole_size, args.img_channel], name = 'whole_NDCT')
 
@@ -117,14 +122,24 @@ class redCNN(object):
         start_time = time.time()
 
         for t in range(self.start_step, args.num_iter):
-            #summary loss
-            _, summary_str= self.sess.run([self.optimizer, self.summary_loss])
+            #get input images
+            real_sample_X, real_sample_Y  =  self.image_loader.preproc_input(args)
+            
+            #train & summary loss
+            _, summary_str= self.sess.run([self.optimizer, self.summary_loss],\
+                                          feed_dict={self.X : real_sample_X,\
+                                                     self.Y : real_sample_Y})
             self.writer.add_summary(summary_str, t)
 
+            
             #print point
             if (t+1) % args.print_freq == 0:
                 #print loss & time 
-                loss, output_img, summary_str0 = self.sess.run([self.loss, self.output_img, self.summary_train_image])
+                loss, output_img, summary_str0 = \
+                self.sess.run([self.loss, self.output_img, self.summary_train_image],\
+                             feed_dict ={self.X: real_sample_X, \
+                                         self.Y: real_sample_Y})
+                
                 print('Iter {} Time {} loss {}'.format(t, time.time() - start_time, loss))
                 #training sample check
                 self.writer.add_summary(summary_str0, t)
@@ -135,10 +150,8 @@ class redCNN(object):
 
             if (t+1) % args.save_freq == 0:
                 self.save(args, t)
+        self.save(args, t)
 
-        self.image_loader.coord.request_stop()
-        self.image_loader.coord.join(self.image_loader.enqueue_threads)
-        
         
     #summary test sample image during training
     def check_sample(self, args, t):
@@ -158,12 +171,11 @@ class redCNN(object):
 
         
     def save(self, args, step):
-        model_name = args.model+".model"
         if not os.path.exists(self.checkpoint_dir):
             os.makedirs(self.checkpoint_dir)
 
         self.saver.save(self.sess,
-                        os.path.join(self.checkpoint_dir, model_name),
+                        os.path.join(self.checkpoint_dir, ".model"),
                         global_step=step)
 
 
@@ -189,7 +201,7 @@ class redCNN(object):
             print(" [!] Load failed...")
 
         ## mk save dir (image & numpy file)    
-        npy_save_dir = os.path.join('.', args.test_npy_save_dir, self.p_info)
+        npy_save_dir = os.path.join(args.result, args.test_npy_save_dir, self.p_info)
 
         if not os.path.exists(npy_save_dir):
             os.makedirs(npy_save_dir)
