@@ -36,8 +36,8 @@ parser.add_argument('--log_dir', dest='log_dir',  default='logs', help='test num
 parser.add_argument('--patch_size', dest='patch_size', type=int,  default=56, help='image patch size, h=w')
 parser.add_argument('--whole_size', dest='whole_size', type=int,  default=512, help='image whole size, h=w')
 parser.add_argument('--img_channel', dest='img_channel', type=int,  default=1, help='image channel, 1')
-parser.add_argument('--img_vmax', dest='img_vmax', type=int, default=3072, help='max value in image')
-parser.add_argument('--img_vmin', dest='img_vmin', type=int, default=-1024,  help='max value in image')
+parser.add_argument('--trun_max', dest='trun_max', type=int, default=2000, help='truncated image max value')
+parser.add_argument('--trun_min', dest='trun_min', type=int, default=-1000, help='truncated image min value')
 
 #train, test
 parser.add_argument('--phase', dest='phase', default='train', help='train, test')
@@ -49,7 +49,7 @@ parser.add_argument('--augument', dest='augument',type=ut.ParseBoolean, default=
 parser.add_argument('--norm', dest='norm',  default='n-11', help='normalization range, -1 ~ 1 : tanh, 0 ~ 1 :sigmoid' )
 parser.add_argument('--is_unpair', dest='is_unpair', type=ut.ParseBoolean, default=True, help='unpaired image(cycle loss) : True|False')
 parser.add_argument('--max_size', dest='max_size', type=int, default=50, help='max size of image pool')
-parser.add_argument('--end_epoch', dest='end_epoch', type=int, default=160, help='end epoch')
+parser.add_argument('--end_epoch', dest='end_epoch', type=int, default=200, help='end epoch')
 parser.add_argument('--decay_epoch', dest='decay_epoch', type=int, default=100, help='epoch to decay lr')
 parser.add_argument('--lr', dest='lr', type=float, default=0.0002, help='initial learning rate for adam')
 parser.add_argument('--batch_size', dest='batch_size', type=int,  default=10, help='batch size')

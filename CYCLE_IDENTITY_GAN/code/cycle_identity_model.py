@@ -44,13 +44,13 @@ class cycle_identity(object):
         self.image_loader = ut.DCMDataLoader(\
               args.dcm_path, args.LDCT_path, args.NDCT_path, \
              image_size = args.whole_size, patch_size = args.patch_size, \
-             depth = args.img_channel, image_max = args.img_vmax, image_min = args.img_vmin,\
+             depth = args.img_channel, image_max = args.trun_max, image_min = args.trun_min,\
              is_unpair = args.is_unpair, augument = args.augument, norm = args.norm)
                                      
         self.test_image_loader = ut.DCMDataLoader(\
              args.dcm_path, args.LDCT_path, args.NDCT_path,\
              image_size = args.whole_size, patch_size = args.patch_size, \
-              depth = args.img_channel, image_max = args.img_vmax, image_min = args.img_vmin,\
+              depth = args.img_channel, image_max = args.trun_max, image_min = args.trun_min,\
              is_unpair = args.is_unpair, augument = args.augument, norm = args.norm)
 
         t1 = time.time()
@@ -97,9 +97,9 @@ class cycle_identity(object):
             name="generatorX2Y")
         
         self.G_Y = self.generator(args, self.patch_Y, True, \
-        name="generatorX2Y")  #G : x->y 
+        name="generatorX2Y")  
         self.F_X = self.generator(args, self.patch_X, True, \
-        name="generatorY2X")  #F : y->X
+        name="generatorY2X")  
                 
         #Discriminator
         self.D_GX = self.discriminator(args, self.G_X, reuse=False, \

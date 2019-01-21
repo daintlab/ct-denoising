@@ -67,7 +67,7 @@ class DCMDataLoader(object):
             self.LDCT_image_name.extend(LDCT_slice_nm)
             self.NDCT_image_name.extend(NDCT_slice_nm)
 
-            #normalization  
+            #truncate & normalization  
             p_LDCT.append(self.normalize(org_LDCT_images, self.image_max , self.image_min))
             p_NDCT.append(self.normalize(org_NDCT_images, self.image_max , self.image_min))
             
@@ -112,6 +112,8 @@ class DCMDataLoader(object):
 
     def normalize(self, img, max_ = 3072, min_=-1024):
         img = img.astype(np.float32) 
+        img[img > max_] = max_
+        img[img < min_] = min_
         if self.norm.lower()  == 'n-11':  #-1 ~ 1
             img = 2 * ((img - min_) / (max_  -  min_)) -1
             return img

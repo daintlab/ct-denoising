@@ -44,13 +44,13 @@ class cyclegan(object):
         self.image_loader = ut.DCMDataLoader(\
               args.dcm_path, args.LDCT_path, args.NDCT_path, \
              image_size = args.whole_size, patch_size = args.patch_size, \
-             depth = args.img_channel, image_max = args.img_vmax, image_min = args.img_vmin,\
+             depth = args.img_channel, image_max = args.trun_max, image_min = args.trun_min,\
              is_unpair = args.is_unpair, augument = args.augument, norm = args.norm)
                                      
         self.test_image_loader = ut.DCMDataLoader(\
              args.dcm_path, args.LDCT_path, args.NDCT_path,\
              image_size = args.whole_size, patch_size = args.patch_size, \
-              depth = args.img_channel, image_max = args.img_vmax, image_min = args.img_vmin,\
+              depth = args.img_channel, image_max = args.trun_max, image_min = args.trun_min,\
              is_unpair = args.is_unpair, augument = args.augument, norm = args.norm)
 
         t1 = time.time()

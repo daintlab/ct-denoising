@@ -36,8 +36,8 @@ parser.add_argument('--log_dir', dest='log_dir',  default='logs', help='test num
 parser.add_argument('--patch_size', dest='patch_size', type=int,  default=55, help='image patch size, h=w')
 parser.add_argument('--whole_size', dest='whole_size', type=int,  default=512, help='image whole size, h=w')
 parser.add_argument('--img_channel', dest='img_channel', type=int,  default=1, help='image channel, 1')
-parser.add_argument('--img_vmax', dest='img_vmax', type=int,  default=3072, help='image max value, 3072')
-parser.add_argument('--img_vmin', dest='img_vmin', type=int,  default=-1024, help='image max value -1024')
+parser.add_argument('--trun_max', dest='trun_max', type=int, default=2000, help='truncated image max value')
+parser.add_argument('--trun_min', dest='trun_min', type=int, default=-1000, help='truncated image min value')
 
 #train, test
 parser.add_argument('--phase', dest='phase', default='train', help='train or test')
