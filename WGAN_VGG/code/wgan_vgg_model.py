@@ -13,7 +13,7 @@ import time
 from glob import glob
 import inout_util as ut
 import wgan_vgg_module as modules
-
+from random import shuffle
 
 class wganVgg(object):
     def __init__(self, sess, args):
@@ -26,8 +26,8 @@ class wganVgg(object):
 
         #save directory
         self.p_info = '_'.join(self.test_patient_no)
-        self.checkpoint_dir = os.path.join('.', args.checkpoint_dir, self.p_info)
-        self.log_dir = os.path.join('.', 'logs',  self.p_info)
+        self.checkpoint_dir = os.path.join(args.result, args.checkpoint_dir, self.p_info)
+        self.log_dir = os.path.join(args.result, args.log_dir,  self.p_info)
         print('directory check!!\ncheckpoint : {}\ntensorboard_logs : {}'.format(self.checkpoint_dir, self.log_dir))
 
         #### set modules (generator, discriminator, vgg net)
@@ -39,29 +39,34 @@ class wganVgg(object):
         load images
         """
         print('data load... dicom -> numpy') 
-        self.image_loader = ut.DCMDataLoader(args.dcm_path, args.LDCT_path, args.NDCT_path, \
-             image_size = args.whole_size, patch_size = args.patch_size, depth = args.img_channel,
-             image_max = args.img_vmax, image_min = args.img_vmin, batch_size = args.batch_size, model = args.model)
+        self.image_loader = ut.DCMDataLoader(\
+              args.dcm_path, args.LDCT_path, args.NDCT_path, \
+             image_size = args.whole_size, patch_size = args.patch_size, \
+             depth = args.img_channel, image_max = args.trun_max, image_min = args.trun_min,\
+             is_unpair = args.is_unpair, augument = args.augument, norm = args.norm)
                                      
-        self.test_image_loader = ut.DCMDataLoader(args.dcm_path, args.LDCT_path, args.NDCT_path,\
-             image_size = args.whole_size, patch_size = args.patch_size, depth = args.img_channel,
-             image_max = args.img_vmax, image_min = args.img_vmin, batch_size = args.batch_size, model = args.model)
+        self.test_image_loader = ut.DCMDataLoader(\
+             args.dcm_path, args.LDCT_path, args.NDCT_path,\
+             image_size = args.whole_size, patch_size = args.patch_size, \
+              depth = args.img_channel, image_max = args.trun_max, image_min = args.trun_min,\
+             is_unpair = args.is_unpair, augument = args.augument, norm = args.norm)
+        
 
         t1 = time.time()
         if args.phase == 'train':
             self.image_loader(self.train_patient_no)
             self.test_image_loader(self.test_patient_no)
             print('data load complete !!!, {}\nN_train : {}, N_test : {}'.format(time.time() - t1, len(self.image_loader.LDCT_image_name), len(self.test_image_loader.LDCT_image_name)))
-            [self.z_i, self.x_i] = self.image_loader.input_pipeline(self.sess, args.patch_size, args.num_iter)
         else:
             self.test_image_loader(self.test_patient_no)
             print('data load complete !!!, {}, N_test : {}'.format(time.time() - t1, len(self.test_image_loader.LDCT_image_name)))
-            self.z_i = tf.placeholder(tf.float32, [None, args.patch_size, args.patch_size, args.img_channel], name = 'whole_LDCT')
-            self.x_i = tf.placeholder(tf.float32, [None, args.patch_size, args.patch_size, args.img_channel], name = 'whole_LDCT')
+            
 
         """
         build model
         """
+        self.z_i = tf.placeholder(tf.float32, [None, args.patch_size, args.patch_size, args.img_channel], name = 'whole_LDCT')
+        self.x_i = tf.placeholder(tf.float32, [None, args.patch_size, args.patch_size, args.img_channel], name = 'whole_LDCT')
         #### image placehold  (patch image, whole image)
         self.whole_z = tf.placeholder(tf.float32, [1, args.whole_size, args.whole_size, args.img_channel], name = 'whole_LDCT')
         self.whole_x = tf.placeholder(tf.float32, [1, args.whole_size, args.whole_size, args.img_channel], name = 'whole_NDCT')
@@ -158,18 +163,29 @@ class wganVgg(object):
 
         for t in range(self.start_step, args.num_iter):
             for _ in range(0, args.d_iters):
+                #get input images
+                real_sample_z, real_sample_x  =  self.image_loader.preproc_input(args)
 
                 #discriminator update
-                self.sess.run(self.d_adam)
- 
+                self.sess.run(self.d_adam, \
+                      feed_dict = {self.z_i : real_sample_z,\
+                                self.x_i : real_sample_x})
+            #get input images
+            real_sample_z, real_sample_x  =  self.image_loader.preproc_input(args)
+            
             #generator update & loss summary
-            _, summary_str= self.sess.run([self.g_adam, self.summary_all_loss])
+            _, summary_str= self.sess.run([self.g_adam, self.summary_all_loss], \
+                                 feed_dict = {self.z_i : real_sample_z,\
+                                        self.x_i : real_sample_x})
             self.writer.add_summary(summary_str, t)
 
             #print point
             if (t+1) % args.print_freq == 0:
                 #print loss & time 
-                d_loss, g_loss, g_zi_img, summary_str0 = self.sess.run([self.D_loss, self.G_loss, self.G_zi, self.summary_train_image])
+                d_loss, g_loss, g_zi_img, summary_str0 = self.sess.run(\
+                   [self.D_loss, self.G_loss, self.G_zi, self.summary_train_image], \
+                          feed_dict = {self.z_i : real_sample_z,\
+                                    self.x_i : real_sample_x})
                 #training sample check
                 self.writer.add_summary(summary_str0, t)
 
@@ -178,10 +194,8 @@ class wganVgg(object):
 
             if (t+1) % args.save_freq == 0:
                 self.save(args, t)
-
-        self.image_loader.coord.request_stop()
-        self.image_loader.coord.join(self.image_loader.enqueue_threads)
-
+        self.save(args, t)
+        
     #summary test sample image during training
     def check_sample(self, args, t):
         #summary whole image'
@@ -231,7 +245,7 @@ class wganVgg(object):
             print(" [!] Load failed...")
 
         ## mk save dir (image & numpy file)    
-        npy_save_dir = os.path.join('.', args.test_npy_save_dir, self.p_info)
+        npy_save_dir = os.path.join(args.result, args.test_npy_save_dir, self.p_info)
 
         if not os.path.exists(npy_save_dir):
             os.makedirs(npy_save_dir)
@@ -240,9 +254,11 @@ class wganVgg(object):
         ## test
         start_time = time.time()
         for idx in range(len(self.test_image_loader.LDCT_images)):
-            test_zi, test_xi = self.test_image_loader.LDCT_images[idx], self.test_image_loader.NDCT_images[idx]
+            test_zi, test_xi \
+            = self.test_image_loader.LDCT_images[idx], self.test_image_loader.NDCT_images[idx]
             
-            whole_G_zi = self.sess.run(self.G_whole_zi, feed_dict={self.whole_z: test_zi.reshape(self.whole_z.get_shape().as_list())})
+            whole_G_zi = self.sess.run(self.G_whole_zi, \
+              feed_dict={self.whole_z: test_zi.reshape(self.whole_z.get_shape().as_list())})
             
             save_file_nm_f = 'from_' +  self.test_image_loader.LDCT_image_name[idx]
             save_file_nm_t = 'to_' +  self.test_image_loader.NDCT_image_name[idx]

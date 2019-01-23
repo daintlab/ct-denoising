@@ -8,7 +8,7 @@ import tensorflow as tf
 import numpy as np
 
 
-def discriminator(image, options, reuse=False, name='discriminator'):
+def discriminator(args, image, reuse=False, name='discriminator'):
     def first_layer(input_, out_channels, ks=3, s=1, name='disc_conv_layer'):
         with tf.variable_scope(name):
             return lrelu(conv2d(input_, out_channels, ks=ks, s=s))
@@ -24,16 +24,16 @@ def discriminator(image, options, reuse=False, name='discriminator'):
             tf.get_variable_scope().reuse_variables()
         else:
             assert tf.get_variable_scope().reuse is False
-        l1 = first_layer(image, options.df_dim, ks=4, s=2, name='disc_layer1')
-        l2 = conv_layer(l1, options.df_dim*2, ks=4, s=2, name='disc_layer2')
-        l3 = conv_layer(l2, options.df_dim*4, ks=4, s=2, name='disc_layer3')
-        l4 = conv_layer(l3, options.df_dim*8, ks=4, s=1, name='disc_layer4')
-        l5 = last_layer(l4, options.img_channel, ks=4, s=1, name='disc_layer5')
+        l1 = first_layer(image, args.ndf, ks=4, s=2, name='disc_layer1')
+        l2 = conv_layer(l1, args.ndf*2, ks=4, s=2, name='disc_layer2')
+        l3 = conv_layer(l2, args.ndf*4, ks=4, s=2, name='disc_layer3')
+        l4 = conv_layer(l3, args.ndf*8, ks=4, s=1, name='disc_layer4')
+        l5 = last_layer(l4, args.img_channel, ks=4, s=1, name='disc_layer5')
         return l5
 
 
 
-def generator(image, options, reuse=False, name="generator"):
+def generator(args, image, reuse=False, name="generator"):
     with tf.variable_scope(name):
         if reuse:
             tf.get_variable_scope().reuse_variables()
@@ -52,18 +52,23 @@ def generator(image, options, reuse=False, name="generator"):
                 m_out = tf.nn.relu(concat_l)
                 return m_out
     
-        l1 = conv_layer(image, options.gf_dim, name='convlayer1') 
-        module1 = gen_module(l1, options.gf_dim, name='gen_module1')
-        module2 = gen_module(module1, options.gf_dim, name='gen_module2')
-        module3 = gen_module(module2, options.gf_dim, name='gen_module3')
-        module4 = gen_module(module3, options.gf_dim, name='gen_module4')
-        module5 = gen_module(module4, options.gf_dim, name='gen_module5')
-        module6 = gen_module(module5, options.gf_dim, name='gen_module6')
+        l1 = conv_layer(image, args.ngf, name='convlayer1') 
+        module1 = gen_module(l1, args.ngf, name='gen_module1')
+        module2 = gen_module(module1, args.ngf, name='gen_module2')
+        module3 = gen_module(module2, args.ngf, name='gen_module3')
+        module4 = gen_module(module3, args.ngf, name='gen_module4')
+        module5 = gen_module(module4, args.ngf, name='gen_module5')
+        module6 = gen_module(module5, args.ngf, name='gen_module6')
         concate_layer = tf.concat([l1, module1, \
                 module2, module3, module4, module5, module6], axis=3, name='concat_layer')
-        concat_conv_l1 = conv_layer(concate_layer, options.gf_dim, ks=3, s=1, name='concat_convlayer1')
-        last_conv_layer = conv_layer(concat_conv_l1, options.glf_dim, ks=3, s=1, name='last_conv_layer')
-        output= tf.add(conv2d(last_conv_layer, options.img_channel, ks=3, s=1), image, name = 'output')
+        concat_conv_l1 = conv_layer(concate_layer, args.ngf, ks=3, s=1, name='concat_convlayer1')
+        last_conv_layer = conv_layer(concat_conv_l1, args.nglf, ks=3, s=1, name='last_conv_layer')
+        if args.norm == 'n-11':
+            output= tf.math.tanh(tf.add(conv2d(last_conv_layer, \
+               args.img_channel, ks=3, s=1), image, name = 'output'))
+        else:
+            output= tf.math.sigmoid(tf.add(conv2d(last_conv_layer, \
+               args.img_channel, ks=3, s=1), image, name = 'output'))
         return output 
 
 
@@ -86,13 +91,15 @@ def conv2d(batch_input, out_channels, ks=4, s=2, name="cov2d"):
             kernel_initializer=tf.random_normal_initializer(0, 0.02))
 
 #### loss
+
+#### loss
 def least_square(A, B):
     return tf.reduce_mean((A - B)**2)
     
 def cycle_loss(A, F_GA, B, G_FB, lambda_):
-    return lambda_ * (tf.reduce_mean(tf.abs(A - F_GA)) + tf.reduce_mean(tf.abs(B - G_FB)))
+    return lambda_ * (tf.reduce_mean(tf.abs(A - F_GA)) \
+       + tf.reduce_mean(tf.abs(B - G_FB)))
 
-def identity_loss(A, G_B, F_A, B, gamma):
-    return   gamma * (tf.reduce_mean(tf.abs(G_B - B)) + tf.reduce_mean(tf.abs(F_A - A)))
-
-   
+def identity_loss(A, G_B, B, F_A, gamma):
+    return   gamma * (tf.reduce_mean(tf.abs(G_B - B)) \
+       + tf.reduce_mean(tf.abs(F_A - A)))

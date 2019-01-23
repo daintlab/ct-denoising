@@ -11,7 +11,7 @@ import sys
 import tensorflow as tf
 from time import time
 sys.path.extend([os.path.abspath("."), os.path.abspath("./../..")])
-from cycle_identity_model import cycle_identity
+from cyclebase_model import cyclebase_model
 import inout_util as ut
 os.chdir(os.getcwd() + '/..')
 print('pwd : {}'.format(os.getcwd()))
@@ -26,7 +26,7 @@ parser.add_argument('--NDCT_path', dest='NDCT_path', default= 'full_3mm', help='
 parser.add_argument('--test_patient_no', dest='test_patient_no',type=ut.ParseList, default= 'L067,L291')
 
 #set save directory
-parser.add_argument('--result', dest='result',  default='/CYCLEIDENT', help='save result dir(check point, test, log, summary params)')
+parser.add_argument('--result', dest='result',  default='/CYCLEBASE', help='save result dir(check point, test, log, summary params)')
 parser.add_argument('--checkpoint_dir', dest='checkpoint_dir',  default='model', help='check point dir')
 parser.add_argument('--test_npy_save_dir', dest='test_npy_save_dir',  default='output', help='test numpy file save dir')
 parser.add_argument('--log_dir', dest='log_dir',  default='logs', help='test numpy file save dir')
@@ -43,20 +43,30 @@ parser.add_argument('--trun_min', dest='trun_min', type=int, default=-1000, help
 parser.add_argument('--phase', dest='phase', default='train', help='train, test')
 
 #train detail
+parser.add_argument('--img_pool', dest='img_pool', type=ut.ParseBoolean, default=True, help='True : use image pool')
+parser.add_argument('--strct', dest='strct',  default='cyc', help='cyc : resnet base cyclegan(CYCLEGAN), ident : identity loss paper...')
 parser.add_argument('--augument', dest='augument',type=ut.ParseBoolean, default=False, help='augumentation')
 parser.add_argument('--norm', dest='norm',  default='n-11', help='normalization range, -1 ~ 1 : tanh, 0 ~ 1 :sigmoid' )
 parser.add_argument('--is_unpair', dest='is_unpair', type=ut.ParseBoolean, default=True, help='unpaired image(cycle loss) : True|False')
-parser.add_argument('--end_epoch', dest='end_epoch', type=int, default=160, help='end epoch')
+parser.add_argument('--max_size', dest='max_size', type=int, default=50, help='max size of image pool')
+parser.add_argument('--end_epoch', dest='end_epoch', type=int, default=200, help='end epoch')
 parser.add_argument('--decay_epoch', dest='decay_epoch', type=int, default=100, help='epoch to decay lr')
 parser.add_argument('--lr', dest='lr', type=float, default=0.0002, help='initial learning rate for adam')
 parser.add_argument('--batch_size', dest='batch_size', type=int,  default=10, help='batch size')
-parser.add_argument('--L1_lambda', dest='L1_lambda', type=float, default=10.0, help='weight of cyclic loss')
-parser.add_argument('--L1_gamma', dest='L1_gamma', type=float, default=5.0, help='weight of identity loss')
 parser.add_argument('--beta1', dest='beta1', type=float, default=0.5, help='The exponential decay rate for the 1st moment estimates.')
 parser.add_argument('--beta2', dest='beta2', type=float, default=0.999, help='The exponential decay rate for the 2nd moment estimates.')
 parser.add_argument('--ngf', dest='ngf', type=int, default=128, help='# of gen filters in first conv layer')
 parser.add_argument('--nglf', dest='nglf', type=int, default=15, help='# of gen filters in last conv layer')
 parser.add_argument('--ndf', dest='ndf', type=int, default=64, help='# of discri filters in first conv layer')
+
+
+#loss params
+parser.add_argument('--cycle_loss', dest='cycle_loss', type=ut.ParseBoolean, default=True, help='+ cyclic loss : True|False')
+parser.add_argument('--ident_loss', dest='ident_loss', type=ut.ParseBoolean, default=False, help='+ identity loss : True|False')
+parser.add_argument('--resid_loss', dest='resid_loss', type=ut.ParseBoolean, default=True, help='+ residuel loss : True|False')
+parser.add_argument('--L1_lambda', dest='L1_lambda', type=float, default=10.0, help='weight of cyclic loss')
+parser.add_argument('--L1_gamma', dest='L1_gamma', type=float, default=5.0, help='weight of identity loss')
+parser.add_argument('--L1_delta', dest='L1_delta', type=float, default=10.0, help='weight of residual loss')
 
 #others
 parser.add_argument('--save_freq', dest='save_freq', type=int, default=2378*2, help='save a model every save_freq (iteration)')
@@ -78,7 +88,7 @@ sess = tf.Session(config=tfconfig)
 
 print('train/test start!!')
 t_start  = time()
-model = cycle_identity(sess, args)
+model = cyclebase_model(sess, args)
 model.train(args) if args.phase == 'train' else model.test(args)
 
 if args.phase == 'train':
